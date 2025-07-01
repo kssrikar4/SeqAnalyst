@@ -1,0 +1,8 @@
+streamlit
+pandas
+numpy
+matplotlib
+biopython
+scipy
+scikit-learn
+umap-learn
