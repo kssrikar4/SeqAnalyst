@@ -21,7 +21,6 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 import umap
 
-# Kyte-Doolittle hydropathy
 KD_SCALE = {
     'A':1.8,'C':2.5,'D':-3.5,'E':-3.5,'F':2.8,
     'G':-0.4,'H':-3.2,'I':4.5,'K':-3.9,'L':3.8,
@@ -140,7 +139,16 @@ def analyze_single_protein(rec):
     return df,{"Score":score},pd.DataFrame([comp]),dom_df,{"aac":fig2,"hyd":fig3}
 
 def analyze_multiple(seqs,typ):
-    ids=[r.id for r in seqs]; n=len(seqs)
+    ids = [r.id for r in seqs]
+    n = len(seqs)
+    
+    base_font = 10
+    min_font = 4
+    font_size = max(min_font, base_font - n//10)
+    heatmap_size = max(6, min(12, n*0.4))
+    dendro_height = max(4, min(10, n*0.3))
+    bar_width = max(6, min(12, n*0.5))
+
     dist=np.zeros((n,n))
     aligner=PairwiseAligner(); aligner.mode="global"
     for i,j in combinations(range(n),2):
@@ -149,21 +157,28 @@ def analyze_multiple(seqs,typ):
     M=dist.max() or 1
     dm=pd.DataFrame(M-dist,index=ids,columns=ids)
     plots={}
+    
     if n>2:
         lm=linkage((M-dist)[np.triu_indices(n,1)],"average")
-        fig4,ax4=plt.subplots(figsize=(6,n*0.3+2))
-        dendrogram(lm,labels=ids,orientation="right",ax=ax4)
+        fig4,ax4=plt.subplots(figsize=(6,dendro_height))
+        dendrogram(lm,labels=ids,orientation="right",ax=ax4,leaf_font_size=font_size)
         plt.tight_layout(); plots["dendrogram"]=fig4
-    fig5,ax5=plt.subplots(); cax=ax5.matshow(dm,cmap="viridis_r"); fig5.colorbar(cax)
-    ax5.set_xticks(range(n)); ax5.set_xticklabels(ids,rotation=90)
-    ax5.set_yticks(range(n)); ax5.set_yticklabels(ids)
-    ax5.set_title("Distance"); plt.tight_layout(); plots["heatmap"]=fig5
+    
+    fig5,ax5=plt.subplots(figsize=(heatmap_size,heatmap_size))
+    cax=ax5.matshow(dm,cmap="viridis_r"); fig5.colorbar(cax)
+    ax5.set_xticks(range(n)); ax5.set_xticklabels(ids,rotation=90,fontsize=font_size)
+    ax5.set_yticks(range(n)); ax5.set_yticklabels(ids,fontsize=font_size)
+    ax5.set_title("Distance",fontsize=font_size+2); plt.tight_layout(); plots["heatmap"]=fig5
 
     if typ.startswith("Gene"):
         feats=get_kmer_freqs(seqs)
         stats={"ID":ids,"Length(bp)":[len(r.seq) for r in seqs],"GC%":[round(GC(r.seq),2) for r in seqs]}
-        fig6,ax6=plt.subplots(); ax6.bar(ids,stats["GC%"]); ax6.set_title("GC%")
-        plt.xticks(rotation=90); plt.tight_layout(); plots["gc"]=fig6
+        fig6,ax6=plt.subplots(figsize=(bar_width,6))
+        ax6.bar(ids,stats["GC%"])
+        ax6.set_title("GC%",fontsize=font_size+2)
+        ax6.tick_params(axis='x',rotation=90,labelsize=font_size)
+        ax6.tick_params(axis='y',labelsize=font_size)
+        plt.tight_layout(); plots["gc"]=fig6
     else:
         feats=get_aa_comp_vectors(seqs)
         stats={"ID":ids,"Length":[len(r.seq) for r in seqs]}
@@ -172,16 +187,21 @@ def analyze_multiple(seqs,typ):
     sf=StandardScaler().fit_transform(feats)
     if sf.shape[1]>=2:
         pr=PCA(2).fit_transform(sf)
-        fig7,ax7=plt.subplots(); ax7.scatter(pr[:,0],pr[:,1])
-        for i,t in enumerate(ids): ax7.annotate(t,(pr[i,0],pr[i,1]))
-        ax7.set_title("PCA"); plt.tight_layout(); plots["pca"]=fig7
+        fig7,ax7=plt.subplots(figsize=(8,6))
+        ax7.scatter(pr[:,0],pr[:,1])
+        for i,t in enumerate(ids): ax7.annotate(t,(pr[i,0],pr[i,1]),fontsize=font_size,alpha=0.7 if n>20 else 1.0)
+        ax7.set_title("PCA",fontsize=font_size+2)
+        ax7.tick_params(labelsize=font_size)
+        plt.tight_layout(); plots["pca"]=fig7
     if n>2 and sf.shape[0]>n-1:
         emb=umap.UMAP(n_neighbors=min(n-1,5),min_dist=0.1,random_state=42).fit_transform(sf)
-        fig8,ax8=plt.subplots(); ax8.scatter(emb[:,0],emb[:,1])
-        for i,t in enumerate(ids): ax8.annotate(t,(emb[i,0],emb[i,1]))
-        ax8.set_title("UMAP"); plt.tight_layout(); plots["umap"]=fig8
+        fig8,ax8=plt.subplots(figsize=(8,6))
+        ax8.scatter(emb[:,0],emb[:,1])
+        for i,t in enumerate(ids): ax8.annotate(t,(emb[i,0],emb[i,1]),fontsize=font_size,alpha=0.7 if n>20 else 1.0)
+        ax8.set_title("UMAP",fontsize=font_size+2)
+        ax8.tick_params(labelsize=font_size)
+        plt.tight_layout(); plots["umap"]=fig8
 
-    # simple consensus: take longest seq length, pad others with '-'
     max_len = max(len(r.seq) for r in seqs)
     aligned = []
     for r in seqs:
@@ -236,4 +256,3 @@ def main():
 
 if __name__=="__main__":
     main()
-
